@@ -12,7 +12,7 @@ const norm = s => String(s || "").trim().toLowerCase();
 const label = s => { const t = String(s || "").trim(); return t ? t[0].toUpperCase() + t.slice(1) : "—"; };
 
 /* ---------- Réglages ---------- */
-const DEFAULT_CFG = { clientId: "", sheetId: "1Ad4UM8kgDshI3R-UFiEdExA_obPknI3byVynrY2GtVY", tab: "Feuille 1", apiKey: "", model: "claude-haiku-5-5", days: 14, nom: "Angelo Teixeira", liens: "", signature: "", tpl: {} };
+const DEFAULT_CFG = { clientId: "", sheetId: "1Ad4UM8kgDshI3R-UFiEdExA_obPknI3byVynrY2GtVY", tab: "Feuille 1", apiKey: "", model: "claude-haiku-5-5", days: 14, nom: "Angelo Teixeira", liens: "", tpl: {} };
 const TPL = {
   fr: `Bonjour {prenom},
 
@@ -541,9 +541,7 @@ function fillTpl(key, lang, it) {
   return t.replace(/\n{3,}/g, "\n\n").trim();
 }
 function toHtml(body) {
-  const sig = (cfg.signature || "").split("\n").map(l => l.trim()).filter(Boolean);
-  const sigHtml = sig.length ? `<br><br><div style="font-family:Arial,Helvetica,sans-serif;color:#888;font-size:12px;line-height:1.5"><b style="font-size:13px">${esc(sig[0])}</b>${sig.slice(1).map(l => "<br>" + linkify(l)).join("")}</div>` : "";
-  return `<div style="${FONT}">${body.split("\n").map(l => linkify(l)).join("<br>")}</div>${sigHtml}`;
+  return `<div style="${FONT}">${body.split("\n").map(l => linkify(l)).join("<br>")}</div>`;
 }
 const FOREIGN = /vancouver|montr[eé]al|qu[eé]bec|toronto|london|londres|manchester|new ?york|los ?angeles|san ?francisco|usa|etats|états|uk|royaume|canada|berlin|munich|barcelon|madrid|amsterdam|dublin|sydney|melbourne|singapo|tokyo|mumbai|bruxelles|brussels|gen[eè]ve|zurich|luxembourg|lisbo|milan|rome|stockholm|copenh|oslo|helsinki|prague|warsaw|vari|bangalore|dubai/i;
 function langGuess(it) {
@@ -565,11 +563,11 @@ async function mailBox(it, box, isRelance) {
     const body = fillTpl((isRelance ? "relance_" : "") + lang, lang, it);
     const canDraft = /@/.test(it.contact) && !demo;
     box.innerHTML = `<p class="note">Suggestion : <b>${sug.lang === "fr" ? "français" : "English"}</b> — ${esc(sug.why)}.</p><div class="row"><label class="note">Langue</label><select id="dLang"><option value="fr" ${lang === "fr" ? "selected" : ""}>Français</option><option value="en" ${lang === "en" ? "selected" : ""}>English</option></select></div>
-      <label class="note">Objet</label><input id="dObj" style="width:100%" value="${esc(subj)}"><label class="note">Corps (la signature des Réglages est ajoutée automatiquement)</label><textarea id="dBody" rows="12">${esc(body)}</textarea>
+      <label class="note">Objet</label><input id="dObj" style="width:100%" value="${esc(subj)}"><label class="note">Corps</label><textarea id="dBody" rows="12">${esc(body)}</textarea>
       <div class="safe">Rien ne part d'ici : ce bouton crée un brouillon dans ton Gmail, que tu envoies toi-même.</div>
       <div class="row"><button class="pri" id="dGo" ${canDraft ? "" : "disabled"}>Créer le brouillon Gmail</button><button id="dCopy">Copier</button><span id="dMsg" class="note">${canDraft ? "" : "Il faut une adresse mail dans « Contact » (et être connecté)."}</span></div>`;
     $("#dLang").onchange = e => draw(e.target.value);
-    $("#dCopy").onclick = () => navigator.clipboard.writeText($("#dObj").value + "\n\n" + $("#dBody").value + "\n\n" + (cfg.signature || "")).then(() => $("#dMsg").textContent = "Copié.", () => $("#dMsg").textContent = "Copie refusée : sélectionne le texte à la main.");
+    $("#dCopy").onclick = () => navigator.clipboard.writeText($("#dObj").value + "\n\n" + $("#dBody").value).then(() => $("#dMsg").textContent = "Copié.", () => $("#dMsg").textContent = "Copie refusée : sélectionne le texte à la main.");
     $("#dGo").onclick = async () => {
       try {
         await createDraft({ to: it.contact.match(/[^\s<>,;]+@[^\s<>,;]+/)[0], subject: $("#dObj").value, body: toHtml($("#dBody").value), html: true });
@@ -583,13 +581,13 @@ async function mailBox(it, box, isRelance) {
 /* ---------- Réglages ---------- */
 function openSettings() {
   $("#sClient").value = cfg.clientId; $("#sSheet").value = cfg.sheetId; $("#sTab").value = cfg.tab; $("#sKey").value = cfg.apiKey; $("#sModel").value = cfg.model;
-  $("#sDays").value = cfg.days; $("#sNom").value = cfg.nom; $("#sLiens").value = cfg.liens; $("#sSig").value = cfg.signature; ["fr","en","relance_fr","relance_en"].forEach(k => $("#t_" + k).value = getTpl(k)); $("#dlgSettings").showModal();
+  $("#sDays").value = cfg.days; $("#sNom").value = cfg.nom; $("#sLiens").value = cfg.liens; ["fr","en","relance_fr","relance_en"].forEach(k => $("#t_" + k).value = getTpl(k)); $("#dlgSettings").showModal();
 }
 $("#btnSettings").onclick = openSettings;
 $("#fSettings").addEventListener("submit", e => {
   if (e.submitter?.value !== "save") return;
   cfg = { clientId: $("#sClient").value.trim(), sheetId: $("#sSheet").value.trim(), tab: $("#sTab").value.trim() || "Feuille 1", apiKey: $("#sKey").value.trim(), model: $("#sModel").value.trim() || "claude-haiku-5-5",
-    days: +$("#sDays").value || 14, nom: $("#sNom").value.trim(), liens: $("#sLiens").value.trim(), signature: $("#sSig").value.trim(), tpl: Object.fromEntries(["fr","en","relance_fr","relance_en"].map(k => [k, $("#t_" + k).value]).filter(([k, v]) => v.trim() && v.trim() !== TPL[k].trim())) };
+    days: +$("#sDays").value || 14, nom: $("#sNom").value.trim(), liens: $("#sLiens").value.trim(), tpl: Object.fromEntries(["fr","en","relance_fr","relance_en"].map(k => [k, $("#t_" + k).value]).filter(([k, v]) => v.trim() && v.trim() !== TPL[k].trim())) };
   saveCfg(); render();
 });
 $("#btnDemo").onclick = async () => { $("#dlgSettings").close(); demo = true; banner('<b>Mode démo</b> : données fictives, rien n\'est écrit nulle part.'); await loadAll(); };
