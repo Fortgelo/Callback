@@ -116,6 +116,11 @@ const SheetBackend = {
     const v = d.values || [];
     const head = v[0] || [];
     if (!head[11] && !head[12] && !head[13]) {
+      const meta = await gfetch(`${SHEETS()}?fields=sheets.properties`);
+      const p = (meta.sheets || []).map(x => x.properties).find(x => x.title === cfg.tab);
+      if (p && p.gridProperties.columnCount < 14) {
+        await gfetch(`${SHEETS()}:batchUpdate`, { method: "POST", body: JSON.stringify({ requests: [{ appendDimension: { sheetId: p.sheetId, dimension: "COLUMNS", length: 14 - p.gridProperties.columnCount } }] }) });
+      }
       await gfetch(`${SHEETS()}/values/${range("L1:N1")}?valueInputOption=USER_ENTERED`, { method: "PUT", body: JSON.stringify({ values: [["Nom du contact", "Notes", "Dernier échange"]] }) });
     }
     return v.slice(1).map((r, i) => rowToItem(r, i + 2)).filter(x => x.nom);
