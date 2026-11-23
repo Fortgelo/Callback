@@ -146,7 +146,11 @@ const backend = () => demo ? DemoBackend : SheetBackend;
 
 async function loadAll() {
   try { items = await backend().load(); render(); }
-  catch (e) { banner(`<b>Impossible de lire le Sheet.</b> ${esc(e.message)}`); }
+  catch (e) {
+    render();
+    const hint = /403|404/.test(e.message) ? " → Le compte Google connecté n'a pas accès à ce Sheet, ou l'ID du Sheet dans Réglages est faux. Partage le Sheet avec ce compte, ou colle l'ID d'un Sheet auquel il a accès." : "";
+    banner(`<b>Impossible de lire le Sheet.</b> ${esc(e.message)}${hint}`);
+  }
 }
 async function change(it, changes) {
   Object.assign(it, changes);
