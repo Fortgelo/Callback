@@ -19,12 +19,14 @@
     <div class="row">
       <span id="authState" class="pill"></span>
       <button id="btnConnect" class="pri">Se connecter à Google</button>
+      <button id="btnFs" class="icon" title="Plein écran" aria-label="Plein écran"></button>
       <button id="btnSettings">Réglages</button>
     </div>
   </header>
 
   <div id="banner"></div>
   <div id="stats" class="stats"></div>
+  <section class="card" id="dash"></section>
 
   <section class="card">
     <div class="row">
@@ -40,6 +42,12 @@
       <button id="btnSync">Vérifier Gmail</button>
     </div>
     <div id="syncOut"></div>
+    <div class="row bar2">
+      <div class="seg" id="viewSeg"><button data-v="liste">Liste</button><button data-v="tableau">Tableau</button></div>
+      <select id="fSort"><option value="relance">Relances d'abord</option><option value="recent">Plus récentes</option><option value="ancien">Plus anciennes</option><option value="nom">Nom (A-Z)</option></select>
+      <select id="fVille"><option value="">Toutes les villes</option></select>
+      <select id="fType"><option value="">Mail + formulaire</option><option value="mail">Mail</option><option value="formulaire">Formulaire</option></select>
+    </div>
     <div class="tabs" id="tabs"></div>
     <div id="list"></div>
   </section>
