@@ -183,13 +183,15 @@ async function searchThreads(it) {
   }
   return out;
 }
+const decodeEnt = t => { const x = document.createElement("textarea"); x.innerHTML = t; return x.value; };
+const AUTO = /no-?reply|notify|notification|mailer-daemon|newsletter|donotreply|do-not-reply|bounce|postmaster/i;
 const hdr = (m, n) => (m.payload?.headers || []).find(h => h.name.toLowerCase() === n.toLowerCase())?.value || "";
 function analyse(threads) {
   let sent = null, reply = null;
   for (const t of threads) for (const m of t.messages || []) {
     const ts = +m.internalDate, isSent = (m.labelIds || []).includes("SENT");
     if (isSent && (!sent || ts < sent.ts)) sent = { ts, subject: hdr(m, "Subject"), threadId: t.id, to: hdr(m, "To") };
-    if (!isSent && (!reply || ts > reply.ts)) reply = { ts, from: hdr(m, "From"), subject: hdr(m, "Subject"), snippet: m.snippet || "", threadId: t.id };
+    if (!isSent && !AUTO.test(hdr(m, "From")) && (!reply || ts > reply.ts)) reply = { ts, from: hdr(m, "From"), subject: hdr(m, "Subject"), snippet: decodeEnt(m.snippet || ""), threadId: t.id };
   }
   return { sent, reply };
 }
@@ -207,6 +209,46 @@ function proposalHtml(r) {
   if (r.sent && (!it.envoye || !it.dateEnvoi)) h += `<button data-a="applySent" data-r="${it.row}">Marquer envoyé le ${toFR(isoOf(r.sent.ts))}</button>`;
   if (r.reply) h += ["Entretien", "En cours", "Refusé"].map(s => `<button data-a="applyStatus" data-r="${it.row}" data-s="${s}">→ ${s}</button>`).join("");
   return h + `</div></div>`;
+}
+
+/* ---------- Gmail : entreprises contactées mais absentes du Sheet ---------- */
+const normK = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
+async function findNew() {
+  const mine = await myAddress(), q = 'in:sent (subject:3D OR subject:VFX OR subject:candidature OR subject:generalist OR subject:généraliste)';
+  const ids = []; let pt = "";
+  for (let p = 0; p < 4; p++) {
+    const l = await gfetch(`${GM}/messages?q=${encodeURIComponent(q)}&maxResults=100${pt ? "&pageToken=" + pt : ""}`);
+    ids.push(...(l.messages || [])); pt = l.nextPageToken; if (!pt) break;
+  }
+  const msgs = [];
+  for (let i = 0; i < ids.length; i += 8) {
+    const part = await Promise.all(ids.slice(i, i + 8).map(m => gfetch(`${GM}/messages/${m.id}?format=metadata&metadataHeaders=To&metadataHeaders=Subject`)));
+    msgs.push(...part);
+  }
+  const known = new Set(items.map(domainOf).filter(Boolean)), names = items.map(i => normK(i.nom)).filter(n => n.length >= 3);
+  const groups = {};
+  for (const m of msgs) {
+    const subj = hdr(m, "Subject"); if (/^\s*(re|tr|fwd?)\s*:/i.test(subj)) continue;
+    const addr = (hdr(m, "To").match(/[^\s<>,;"]+@[^\s<>,;"]+/g) || []).map(a => a.toLowerCase()).find(a => a !== mine); if (!addr || AUTO.test(addr)) continue;
+    const dom = addr.split("@")[1], key = GENERIC.test(dom) ? addr : dom;
+    if (known.has(dom)) continue;
+    const label = normK(dom.split(".").slice(0, -1).pop());
+    if (names.some(n => label.includes(n) || (label.length >= 4 && n.includes(label)))) continue;
+    const ts = +m.internalDate, g = groups[key] ||= { key, addr, dom, first: ts, last: ts, subject: subj, n: 0 };
+    g.n++; g.first = Math.min(g.first, ts); g.last = Math.max(g.last, ts);
+  }
+  return Object.values(groups).sort((a, b) => b.first - a.first).map(g => {
+    const base = GENERIC.test(g.dom) ? g.addr.split("@")[0] : g.dom.split(".").slice(0, -1).pop();
+    return { ...g, name: base ? base[0].toUpperCase() + base.slice(1) : g.dom };
+  });
+}
+let newFound = [];
+function newHtml(list) {
+  newFound = list;
+  if (!list.length) return '<p class="note">Aucune entreprise contactée en dehors de ton Sheet.</p>';
+  return `<p class="note"><b>${list.length} entreprise(s) contactée(s) par mail mais absente(s) du Sheet.</b> Corrige le nom si besoin, puis ajoute.</p>` + list.map((g, i) =>
+    `<div class="prop"><div class="row"><input data-nn="${i}" value="${esc(g.name)}" style="flex:1;min-width:140px"><button class="pri" data-a="addNew" data-i="${i}">Ajouter au Sheet</button></div>
+     <div class="note">${esc(g.addr)} — 1er mail le ${toFR(isoOf(g.first))}${g.n > 1 ? ` (${g.n} mails)` : ""} — « ${esc(g.subject)} »</div></div>`).join("");
 }
 let lastResults = {};
 function showProposals(el, results) {
@@ -294,6 +336,13 @@ document.addEventListener("click", async e => {
   const head = t.closest(".head"); if (head) { open = open === +head.dataset.o ? null : +head.dataset.o; render(); return; }
   const a = t.dataset.a; if (!a) return;
   try {
+    if (a === "addNew") {
+      const g = newFound[+t.dataset.i], nm = document.querySelector(`[data-nn="${t.dataset.i}"]`).value.trim() || g.name;
+      if (items.some(x => norm(x.nom) === norm(nm))) { t.textContent = "Déjà dans la liste"; t.disabled = true; return; }
+      const it = { statut: "en attente", nom: nm, offre: "Généraliste 3D", envoye: true, dateEnvoi: isoOf(g.first), type: "Mail (spontanée)", contact: g.addr, site: GENERIC.test(g.dom) ? "" : "https://" + g.dom, lieu: "", relance: false, dateRelance: "", contactNom: "", notes: "", echange: `Mail du ${toFR(isoOf(g.first))}` };
+      t.disabled = true; t.textContent = "Ajout…";
+      await backend().add(it); items.push(it); render(); t.textContent = "Ajouté"; return;
+    }
     if (a === "applySent") { const r = lastResults[t.dataset.r]; await change(r.it, { envoye: true, dateEnvoi: isoOf(r.sent.ts), statut: norm(r.it.statut) === "à envoyer" || !r.it.statut ? "en attente" : r.it.statut, echange: `Mail du ${toFR(isoOf(r.sent.ts))}` }); t.disabled = true; t.textContent = "Appliqué"; return; }
     if (a === "applyStatus") { const r = lastResults[t.dataset.r]; await change(r.it, { statut: t.dataset.s, echange: `Réponse du ${toFR(isoOf(r.reply.ts))}` }); t.disabled = true; t.textContent = "Appliqué"; return; }
     const it = items.find(x => x.row == t.closest(".det")?.dataset.r); if (!it) return;
@@ -315,6 +364,10 @@ $("#btnSync").onclick = async () => {
       if ((r.sent && (!r.it.envoye || !r.it.dateEnvoi)) || r.reply) res.push(r);
     }
     showProposals(out, res);
+    out.insertAdjacentHTML("beforeend", '<p class="note">Recherche des entreprises contactées hors Sheet…</p>');
+    const fresh = await findNew();
+    out.lastElementChild.remove();
+    out.insertAdjacentHTML("beforeend", newHtml(fresh));
   } catch (e) { out.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
   $("#btnSync").disabled = false;
 };
