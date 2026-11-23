@@ -55,7 +55,7 @@
     <input id="sSheet">
     <label>Nom de l'onglet</label>
     <input id="sTab" value="Feuille 1">
-    <label>Clé API Anthropic (facultatif : fiches entreprise et rédaction des mails)</label>
+    <label>Clé API Anthropic (facultatif : remplit la fiche d'une entreprise)</label>
     <input id="sKey" type="password" placeholder="sk-ant-…">
     <label>Modèle</label>
     <input id="sModel" value="claude-haiku-5-5">
@@ -64,10 +64,16 @@
     <hr>
     <label>Ton nom (pour les mails)</label>
     <input id="sNom" value="Angelo Teixeira">
-    <label>Lien portfolio / showreel</label>
-    <input id="sPortfolio" placeholder="https://…">
-    <label>Présentation en 2-3 phrases (ce que tu fais, tes points forts)</label>
-    <textarea id="sPitch" rows="3"></textarea>
+    <label>Liens à mettre dans les mails (une ligne par lien : Nom | URL)</label>
+    <textarea id="sLiens" rows="3" placeholder="LinkedIn | https://…&#10;Demo reel | https://…&#10;Instagram | https://…"></textarea>
+    <label>Signature (1re ligne en gras, puis une ligne par info ; ajoutée à la fin de chaque mail)</label>
+    <textarea id="sSig" rows="4" placeholder="Angelo Teixeira | 3D GENERALIST&#10;Email: …&#10;Tel: …"></textarea>
+    <details><summary>Modèles de mails (variables : {entreprise} {prenom} {nom} {date} {liens})</summary>
+      <label>Candidature — français</label><textarea id="t_fr" rows="10"></textarea>
+      <label>Candidature — anglais</label><textarea id="t_en" rows="10"></textarea>
+      <label>Relance — français</label><textarea id="t_relance_fr" rows="6"></textarea>
+      <label>Relance — anglais</label><textarea id="t_relance_en" rows="6"></textarea>
+    </details>
     <div class="row" style="margin-top:12px">
       <button type="submit" class="pri" value="save">Enregistrer</button>
       <button type="submit" value="cancel" formnovalidate>Annuler</button>

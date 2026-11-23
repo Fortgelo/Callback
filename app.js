@@ -12,7 +12,42 @@ const norm = s => String(s || "").trim().toLowerCase();
 const label = s => { const t = String(s || "").trim(); return t ? t[0].toUpperCase() + t.slice(1) : "—"; };
 
 /* ---------- Réglages ---------- */
-const DEFAULT_CFG = { clientId: "", sheetId: "1Ad4UM8kgDshI3R-UFiEdExA_obPknI3byVynrY2GtVY", tab: "Feuille 1", apiKey: "", model: "claude-haiku-5-5", days: 14, nom: "Angelo Teixeira", portfolio: "", pitch: "" };
+const DEFAULT_CFG = { clientId: "", sheetId: "1Ad4UM8kgDshI3R-UFiEdExA_obPknI3byVynrY2GtVY", tab: "Feuille 1", apiKey: "", model: "claude-haiku-5-5", days: 14, nom: "Angelo Teixeira", liens: "", signature: "", tpl: {} };
+const TPL = {
+  fr: `Bonjour {prenom},
+
+Je m'appelle {nom} et je suis 3D Généraliste.
+Je travaille depuis 3 ans et j'ai participé à diverses productions : des documentaires et des publicités (France TV, DIOR, Nissan, Renault, Vichy, Cdiscount...).
+
+J'aime beaucoup les projets de {entreprise}, je souhaitais donc prendre un premier contact avec vous.
+Si vous recherchez un généraliste 3D ou du compositing, je suis disponible en freelance :)
+
+{liens}`,
+  en: `Hi {prenom} !
+
+My name is {nom} and I'm a 3D Generalist based in Paris.
+
+I've been working in the industry for 3 years, mainly on documentaries and commercials for clients such as DIOR, France TV, Nissan, Renault, Vichy, Cdiscount....
+
+I really like the projects of {entreprise}, so I wanted to reach out and introduce myself.
+
+If you're ever looking for a 3D Generalist/Compositing, I'm currently available for freelance work :)
+
+{liens}`,
+  relance_fr: `Bonjour {prenom},
+
+Je me permets de revenir vers vous suite à mon message du {date}.
+Je reste disponible en freelance si {entreprise} recherche un généraliste 3D ou du compositing, et je serais ravi d'échanger avec vous.
+
+Belle journée,`,
+  relance_en: `Hi {prenom} !
+
+Just following up on my message from {date}.
+I'm still available for freelance work as a 3D Generalist / Compositor, and I'd love to chat if {entreprise} has a need.
+
+Best,`
+};
+const getTpl = k => (cfg.tpl && cfg.tpl[k]) || TPL[k];
 let cfg = { ...DEFAULT_CFG, ...JSON.parse(localStorage.getItem("cand_cfg") || "{}") };
 const saveCfg = () => localStorage.setItem("cand_cfg", JSON.stringify(cfg));
 
@@ -171,9 +206,9 @@ function showProposals(el, results) {
 }
 function mimeHeader(s) { return /^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${btoa(unescape(encodeURIComponent(s)))}?=`; }
 const b64url = s => btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-async function createDraft({ to, subject, body, threadId }) {
+async function createDraft({ to, subject, body, threadId, html }) {
   const bodyB64 = btoa(unescape(encodeURIComponent(body))).replace(/(.{76})/g, "$1\r\n");
-  const raw = b64url([`To: ${to}`, `Subject: ${mimeHeader(subject)}`, "MIME-Version: 1.0", "Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: base64", "", bodyB64].join("\r\n"));
+  const raw = b64url([`To: ${to}`, `Subject: ${mimeHeader(subject)}`, "MIME-Version: 1.0", `Content-Type: text/${html ? "html" : "plain"}; charset=UTF-8`, "Content-Transfer-Encoding: base64", "", bodyB64].join("\r\n"));
   const message = { raw }; if (threadId) message.threadId = threadId;
   return gfetch(`${GM}/drafts`, { method: "POST", body: JSON.stringify({ message }) });
 }
@@ -302,33 +337,55 @@ $("#btnAdd").onclick = async () => {
 };
 
 /* ---------- Mail / relance : brouillon seulement ---------- */
+const FR_HINT = /paris|lyon|marseille|bordeaux|lille|nantes|toulouse|montpellier|rennes|strasbourg|annecy|angoul|nice|france|\.fr\b/i;
+const linkify = t => esc(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>').replace(/(^|[\s>])([\w.+-]+@[\w-]+\.[\w.-]+)/g, '$1<a href="mailto:$2">$2</a>');
+const FONT = "font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#000;line-height:1.5";
+function liensTexte(lang) {
+  return (cfg.liens || "").split("\n").map(l => l.trim()).filter(Boolean).map(l => { const [a, ...b] = l.split("|"); return b.length ? `${a.trim()}${lang === "fr" ? " : " : ": "}${b.join("|").trim()}` : l; }).join("\n");
+}
+function fillTpl(key, lang, it) {
+  const prenom = (it.contactNom || "").trim().split(/\s+/)[0] || "";
+  const t = getTpl(key).replace(/ ?\{prenom\}/g, prenom ? " " + prenom : "").replace(/\{nom\}/g, cfg.nom).replace(/\{entreprise\}/g, it.nom)
+    .replace(/\{date\}/g, toFR(it.dateEnvoi) || "…").replace(/\{liens\}/g, liensTexte(lang));
+  return t.replace(/\n{3,}/g, "\n\n").trim();
+}
+function toHtml(body) {
+  const sig = (cfg.signature || "").split("\n").map(l => l.trim()).filter(Boolean);
+  const sigHtml = sig.length ? `<br><br><div style="font-family:Arial,Helvetica,sans-serif;color:#888;font-size:12px;line-height:1.5"><b style="font-size:13px">${esc(sig[0])}</b>${sig.slice(1).map(l => "<br>" + linkify(l)).join("")}</div>` : "";
+  return `<div style="${FONT}">${body.split("\n").map(l => linkify(l)).join("<br>")}</div>${sigHtml}`;
+}
 async function mailBox(it, box, isRelance) {
-  box.innerHTML = '<p class="note">Rédaction…</p>';
-  const p = cfg.portfolio || "[LIEN PORTFOLIO]";
-  const t = await askClaude(`Écris ${isRelance ? `une relance courte (4 lignes max) pour une candidature envoyée le ${toFR(it.dateEnvoi)}` : "un mail de candidature spontanée court (8 lignes max)"}, en français, ton direct et professionnel, vouvoiement. Expéditeur : ${cfg.nom}, 3D artist${cfg.pitch ? ` (${cfg.pitch})` : ""}. Destinataire : « ${it.nom} »${it.contactNom ? `, contact ${it.contactNom}` : ""}. Poste visé : ${it.offre}. Portfolio : ${p}. N'invente aucun projet, client ou compétence : uniquement ce qui est fourni. JSON seul : {"objet":"…","corps":"texte brut sans markdown, avec signature"}.`, { max: 900 });
-  const r = parseJSON(t), canDraft = /@/.test(it.contact) && !demo;
-  box.innerHTML = `<label class="note">Objet</label><input id="dObj" style="width:100%" value="${esc(r.objet)}"><label class="note">Corps</label><textarea id="dBody" rows="9">${esc(r.corps)}</textarea>
-    <div class="safe">Rien ne part d'ici : ce bouton crée un brouillon dans ton Gmail, que tu envoies toi-même.</div>
-    <div class="row"><button class="pri" id="dGo" ${canDraft ? "" : "disabled"}>Créer le brouillon Gmail</button><button id="dCopy">Copier</button><span id="dMsg" class="note">${canDraft ? "" : "Il faut une adresse mail dans « Contact » (et être connecté)."}</span></div>`;
-  $("#dCopy").onclick = () => navigator.clipboard.writeText($("#dObj").value + "\n\n" + $("#dBody").value).then(() => $("#dMsg").textContent = "Copié.", () => $("#dMsg").textContent = "Copie refusée : sélectionne le texte à la main.");
-  $("#dGo").onclick = async () => {
-    try {
-      await createDraft({ to: it.contact.match(/[^\s<>,;]+@[^\s<>,;]+/)[0], subject: $("#dObj").value, body: $("#dBody").value });
-      $("#dMsg").innerHTML = 'Brouillon créé. <a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noopener">Ouvrir Gmail</a> — une fois envoyé, passe la ligne en « en attente ».';
-    } catch (e) { $("#dMsg").textContent = "Échec : " + e.message; }
+  const guess = FR_HINT.test(`${it.lieu} ${it.contact}`) ? "fr" : "en";
+  const draw = lang => {
+    const subj = isRelance ? (lang === "fr" ? "Re : 3D/VFX" : "Re: 3D/VFX") : "3D/VFX";
+    const body = fillTpl((isRelance ? "relance_" : "") + lang, lang, it);
+    const canDraft = /@/.test(it.contact) && !demo;
+    box.innerHTML = `<div class="row"><label class="note">Langue</label><select id="dLang"><option value="fr" ${lang === "fr" ? "selected" : ""}>Français</option><option value="en" ${lang === "en" ? "selected" : ""}>English</option></select></div>
+      <label class="note">Objet</label><input id="dObj" style="width:100%" value="${esc(subj)}"><label class="note">Corps (la signature des Réglages est ajoutée automatiquement)</label><textarea id="dBody" rows="12">${esc(body)}</textarea>
+      <div class="safe">Rien ne part d'ici : ce bouton crée un brouillon dans ton Gmail, que tu envoies toi-même.</div>
+      <div class="row"><button class="pri" id="dGo" ${canDraft ? "" : "disabled"}>Créer le brouillon Gmail</button><button id="dCopy">Copier</button><span id="dMsg" class="note">${canDraft ? "" : "Il faut une adresse mail dans « Contact » (et être connecté)."}</span></div>`;
+    $("#dLang").onchange = e => draw(e.target.value);
+    $("#dCopy").onclick = () => navigator.clipboard.writeText($("#dObj").value + "\n\n" + $("#dBody").value + "\n\n" + (cfg.signature || "")).then(() => $("#dMsg").textContent = "Copié.", () => $("#dMsg").textContent = "Copie refusée : sélectionne le texte à la main.");
+    $("#dGo").onclick = async () => {
+      try {
+        await createDraft({ to: it.contact.match(/[^\s<>,;]+@[^\s<>,;]+/)[0], subject: $("#dObj").value, body: toHtml($("#dBody").value), html: true });
+        $("#dMsg").innerHTML = 'Brouillon créé. <a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noopener">Ouvrir Gmail</a> — une fois envoyé, passe la ligne en « en attente ».';
+      } catch (e) { $("#dMsg").textContent = "Échec : " + e.message; }
+    };
   };
+  draw(guess);
 }
 
 /* ---------- Réglages ---------- */
 function openSettings() {
   $("#sClient").value = cfg.clientId; $("#sSheet").value = cfg.sheetId; $("#sTab").value = cfg.tab; $("#sKey").value = cfg.apiKey; $("#sModel").value = cfg.model;
-  $("#sDays").value = cfg.days; $("#sNom").value = cfg.nom; $("#sPortfolio").value = cfg.portfolio; $("#sPitch").value = cfg.pitch; $("#dlgSettings").showModal();
+  $("#sDays").value = cfg.days; $("#sNom").value = cfg.nom; $("#sLiens").value = cfg.liens; $("#sSig").value = cfg.signature; ["fr","en","relance_fr","relance_en"].forEach(k => $("#t_" + k).value = getTpl(k)); $("#dlgSettings").showModal();
 }
 $("#btnSettings").onclick = openSettings;
 $("#fSettings").addEventListener("submit", e => {
   if (e.submitter?.value !== "save") return;
   cfg = { clientId: $("#sClient").value.trim(), sheetId: $("#sSheet").value.trim(), tab: $("#sTab").value.trim() || "Feuille 1", apiKey: $("#sKey").value.trim(), model: $("#sModel").value.trim() || "claude-haiku-5-5",
-    days: +$("#sDays").value || 14, nom: $("#sNom").value.trim(), portfolio: $("#sPortfolio").value.trim(), pitch: $("#sPitch").value.trim() };
+    days: +$("#sDays").value || 14, nom: $("#sNom").value.trim(), liens: $("#sLiens").value.trim(), signature: $("#sSig").value.trim(), tpl: Object.fromEntries(["fr","en","relance_fr","relance_en"].map(k => [k, $("#t_" + k).value]).filter(([k, v]) => v.trim() && v.trim() !== TPL[k].trim())) };
   saveCfg(); render();
 });
 $("#btnDemo").onclick = async () => { $("#dlgSettings").close(); demo = true; banner('<b>Mode démo</b> : données fictives, rien n\'est écrit nulle part.'); await loadAll(); };
