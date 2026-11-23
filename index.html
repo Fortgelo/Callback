@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Callback</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#161614">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Callback</h1>
+      <p class="sub">Ton suivi, relié à ton Google Sheet et à Gmail. L'app ne peut jamais envoyer de mail : elle crée seulement des brouillons.</p>
+    </div>
+    <div class="row">
+      <span id="authState" class="pill"></span>
+      <button id="btnConnect" class="pri">Se connecter à Google</button>
+      <button id="btnSettings">Réglages</button>
+    </div>
+  </header>
+
+  <div id="banner"></div>
+  <div id="stats" class="stats"></div>
+
+  <section class="card">
+    <div class="row">
+      <input id="newName" class="grow" placeholder="Nom d'une entreprise (ex. Mikros, Illumination…)" autocomplete="off">
+      <button id="btnAdd" class="pri">Analyser</button>
+    </div>
+    <div id="addOut"></div>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <input id="q" class="grow" placeholder="Rechercher une entreprise…" autocomplete="off">
+      <button id="btnSync">Vérifier Gmail</button>
+    </div>
+    <div id="syncOut"></div>
+    <div class="tabs" id="tabs"></div>
+    <div id="list"></div>
+  </section>
+</div>
+
+<dialog id="dlgSettings">
+  <form method="dialog" id="fSettings">
+    <h2>Réglages</h2>
+    <p class="note">Tout est gardé uniquement dans ce navigateur, sur cet appareil. Rien n'est envoyé ailleurs qu'à Google et à Anthropic.</p>
+    <label>Google Client ID (OAuth)</label>
+    <input id="sClient" placeholder="xxxx.apps.googleusercontent.com">
+    <label>ID du Google Sheet</label>
+    <input id="sSheet">
+    <label>Nom de l'onglet</label>
+    <input id="sTab" value="Feuille 1">
+    <label>Clé API Anthropic (facultatif : fiches entreprise et rédaction des mails)</label>
+    <input id="sKey" type="password" placeholder="sk-ant-…">
+    <label>Modèle</label>
+    <input id="sModel" value="claude-haiku-5-5">
+    <label>Relance après (jours)</label>
+    <input id="sDays" type="number" min="3" value="14">
+    <hr>
+    <label>Ton nom (pour les mails)</label>
+    <input id="sNom" value="Angelo Teixeira">
+    <label>Lien portfolio / showreel</label>
+    <input id="sPortfolio" placeholder="https://…">
+    <label>Présentation en 2-3 phrases (ce que tu fais, tes points forts)</label>
+    <textarea id="sPitch" rows="3"></textarea>
+    <div class="row" style="margin-top:12px">
+      <button type="submit" class="pri" value="save">Enregistrer</button>
+      <button type="submit" value="cancel" formnovalidate>Annuler</button>
+      <button type="button" id="btnDemo">Essayer en mode démo</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
