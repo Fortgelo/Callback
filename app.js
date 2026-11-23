@@ -92,13 +92,19 @@ async function connect() {
   });
 }
 const authed = () => demo || (token && Date.now() < tokenExp);
-async function gfetch(url, opts = {}) {
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function gfetch(url, opts = {}, attempt = 0) {
   if (!authed()) { const e = new Error("Session Google expirée : clique sur « Se connecter à Google »."); e.auth = true; throw e; }
   const r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: "Bearer " + token, "Content-Type": "application/json" } });
   if (r.status === 401) { token = ""; const e = new Error("Session Google expirée : clique sur « Se connecter à Google »."); e.auth = true; throw e; }
-  if (!r.ok) throw new Error(`Google ${r.status} : ${(await r.text()).slice(0, 200)}`);
+  if (!r.ok) {
+    const txt = await r.text();
+    if ((r.status === 429 || (r.status === 403 && /quota|rate/i.test(txt))) && attempt < 5) { onWait(attempt + 1); await sleep(20000); return gfetch(url, opts, attempt + 1); }
+    throw new Error(`Google ${r.status} : ${txt.slice(0, 200)}`);
+  }
   return r.status === 204 ? null : r.json();
 }
+let onWait = () => {};
 
 /* ---------- Backend : Google Sheet ---------- */
 const rowToItem = (r, row) => ({
@@ -175,7 +181,7 @@ async function myAddress() { if (!me) me = (await gfetch(`${GM}/profile`)).email
 async function searchThreads(it) {
   const d = domainOf(it), parts = [`"${it.nom}"`]; if (d) parts.unshift(`from:${d}`, `to:${d}`);
   const q = `in:anywhere (${parts.join(" OR ")})`;
-  const l = await gfetch(`${GM}/threads?q=${encodeURIComponent(q)}&maxResults=6`);
+  const l = await gfetch(`${GM}/threads?q=${encodeURIComponent(q)}&maxResults=4`);
   const out = [];
   for (const t of l.threads || []) {
     const th = await gfetch(`${GM}/threads/${t.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`);
@@ -221,8 +227,9 @@ async function findNew() {
     ids.push(...(l.messages || [])); pt = l.nextPageToken; if (!pt) break;
   }
   const msgs = [];
-  for (let i = 0; i < ids.length; i += 8) {
-    const part = await Promise.all(ids.slice(i, i + 8).map(m => gfetch(`${GM}/messages/${m.id}?format=metadata&metadataHeaders=To&metadataHeaders=Subject`)));
+  for (let i = 0; i < ids.length; i += 5) {
+    await sleep(500);
+    const part = await Promise.all(ids.slice(i, i + 5).map(m => gfetch(`${GM}/messages/${m.id}?format=metadata&metadataHeaders=To&metadataHeaders=Subject`)));
     msgs.push(...part);
   }
   const known = new Set(items.map(domainOf).filter(Boolean)), names = items.map(i => normK(i.nom)).filter(n => n.length >= 3);
@@ -356,11 +363,11 @@ $("#btnConnect").onclick = async () => { try { await connect(); banner(""); awai
 $("#btnSync").onclick = async () => {
   const out = $("#syncOut"), todo = items.filter(i => ["en attente", "à envoyer", ""].includes(norm(i.statut)));
   if (demo) { out.innerHTML = '<p class="warn">Indisponible en mode démo.</p>'; return; }
-  $("#btnSync").disabled = true; const res = [];
+  $("#btnSync").disabled = true; const res = []; onWait = n => { out.insertAdjacentHTML("afterbegin", `<p class="note">Gmail demande de ralentir : pause de 20 s (essai ${n}/5)…</p>`); };
   try {
     for (let k = 0; k < todo.length; k++) {
       out.innerHTML = `<p class="note">Gmail : ${k + 1}/${todo.length} — ${esc(todo[k].nom)}…</p>`;
-      const r = await checkOne(todo[k]);
+      const r = await checkOne(todo[k]); await sleep(900);
       if ((r.sent && (!r.it.envoye || !r.it.dateEnvoi)) || r.reply) res.push(r);
     }
     showProposals(out, res);
