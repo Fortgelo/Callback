@@ -81,3 +81,15 @@ details#mapDet{margin-top:12px}summary{cursor:pointer;color:var(--mute)}
 .ksel{display:none;width:100%;margin-top:6px}
 @media (pointer:coarse){.ksel{display:block}.kcard{cursor:pointer}}
 @media (max-width:600px){.wrap{padding:12px 10px 50px}.board{grid-auto-columns:78%}}
+
+/* touches de vert */
+.stat.g{border-top:3px solid var(--ok)}.stat.g b{color:var(--ok)}
+.stat.w{border-top:3px solid var(--warn)}.stat.r{border-top:3px solid var(--bad)}
+.bar{fill:var(--ok)}.dot{fill:var(--ok);stroke:var(--ok)}
+.big{color:var(--ok)}
+.seg button.on{background:var(--ok);color:#06210f}
+.col.good{border-top:3px solid var(--ok)}.col.blue{border-top:3px solid var(--acc)}.col.bad{border-top:3px solid var(--bad)}
+.dblock h3{color:var(--ok)}
+.tabs button.on{background:var(--ok);border-color:var(--ok);color:#06210f}
+button.pri{background:var(--ok);border-color:var(--ok);color:#06210f;font-weight:600}
+.mrow b{color:var(--ok)}

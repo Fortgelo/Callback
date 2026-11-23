@@ -299,7 +299,7 @@ function render() {
   const n = f => items.filter(f).length;
   $("#stats").innerHTML = [["Entreprises", items.length], ["Envoyées", n(i => i.envoye)], ["En attente", n(i => norm(i.statut) === "en attente")], ["À relancer", n(needsRelance)],
     ["Entretiens / en cours", n(i => ["entretien", "accepté", "en cours"].includes(norm(i.statut)))], ["Refus", n(i => norm(i.statut) === "refusé")]]
-    .map(([l, v]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join("");
+    .map(([l, v]) => `<div class="stat ${{ "Envoyées": "g", "Entretiens / en cours": "g", "À relancer": "w", "Refus": "r" }[l] || ""}"><b>${v}</b><span>${l}</span></div>`).join("");
   renderDash(); renderMain();
 }
 
@@ -346,7 +346,7 @@ function renderMain() {
 function boardHtml(list) {
   return `<div class="board">${STATUTS.map(s => {
     const col = list.filter(i => colOf(i) === s);
-    return `<div class="col" data-col="${esc(s)}"><div class="colh"><b>${esc(label(s))}</b><span class="pill">${col.length}</span></div><div class="cards">${col.map(it =>
+    return `<div class="col ${statusClass(s)}" data-col="${esc(s)}"><div class="colh"><b>${esc(label(s))}</b><span class="pill">${col.length}</span></div><div class="cards">${col.map(it =>
       `<div class="kcard ${statusClass(s)}" draggable="true" data-k="${it.row}"><div class="kt">${logo(it)}<b>${esc(it.nom)}</b></div>
         <div class="note">${esc(it.lieu || "")}${it.lieu && ageTxt(it) ? " · " : ""}${ageTxt(it)}</div>${needsRelance(it) ? '<span class="pill warn">à relancer</span>' : ""}
         <select class="ksel" data-ks="${it.row}">${STATUTS.map(x => `<option value="${esc(x)}" ${x === s ? "selected" : ""}>${esc(label(x))}</option>`).join("")}</select></div>`).join("")}</div></div>`;
