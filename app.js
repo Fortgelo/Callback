@@ -304,7 +304,7 @@ function render() {
 }
 
 /* ---------- Vues : liste, tableau, tableau de bord, carte ---------- */
-let view = localStorage.getItem("cand_view") || "liste", sortBy = "relance", fVille = "", fType = "", mapOpen = false;
+let view = localStorage.getItem("cand_view") || "liste", sortBy = "relance", fVille = "", fType = "", fMonth = "", mapOpen = false;
 const sorters = {
   relance: (a, b) => { const ra = needsRelance(a), rb = needsRelance(b); if (ra !== rb) return ra ? -1 : 1;
     if (ra) return (a.dateRelance || a.dateEnvoi).localeCompare(b.dateRelance || b.dateEnvoi); return (b.dateEnvoi || "").localeCompare(a.dateEnvoi || ""); },
@@ -326,7 +326,7 @@ function moveTo(it, s) {
 }
 function filtered() {
   const q = norm($("#q").value);
-  return items.filter(i => (!q || norm(i.nom).includes(q)) && (!fVille || norm(i.lieu) === norm(fVille)) && (!fType || (fType === "mail" ? /mail/i.test(i.type) : /formul/i.test(i.type))));
+  return items.filter(i => (!q || norm(i.nom).includes(q)) && (!fVille || norm(i.lieu) === norm(fVille)) && (!fMonth || (i.dateEnvoi || "").startsWith(fMonth)) && (!fType || (fType === "mail" ? /mail/i.test(i.type) : /formul/i.test(i.type))));
 }
 function renderMain() {
   document.querySelectorAll("#viewSeg button").forEach(b => b.classList.toggle("on", b.dataset.v === view));
@@ -335,6 +335,7 @@ function renderMain() {
   $("#fSort").value = sortBy; $("#fType").value = fType;
   $("#fSort").style.display = view === "liste" ? "" : "none";
   $("#tabs").style.display = view === "liste" ? "" : "none";
+  $("#monthChip").innerHTML = fMonth ? `<span class="pill good">Envoyées en ${new Date(fMonth + "-01T12:00").toLocaleDateString("fr-FR", { month: "long", year: "numeric" })} · ${filtered().length} <button class="chipx" data-a="clearMonth">✕ Tout afficher</button></span>` : "";
   let list = filtered();
   if (view === "tableau") { $("#list").innerHTML = boardHtml(list.sort(sorters.relance)); return; }
   const tabs = ["Toutes", "À relancer", ...STATUTS];
@@ -392,10 +393,10 @@ function renderDash() {
   for (const it of items) { const m = months.find(x => it.dateEnvoi && it.dateEnvoi.startsWith(x.key)); if (m) m.n++; }
   const max = Math.max(1, ...months.map(m => m.n));
   const bars = months.map((m, i) => { const h = Math.round(m.n / max * 58), x = i * 25 + 4;
-    return `<g><rect x="${x}" y="${80 - h}" width="18" height="${h}" rx="3" class="bar"><title>${m.lab} : ${m.n}</title></rect>${m.n ? `<text x="${x + 9}" y="${76 - h}" text-anchor="middle" class="bn">${m.n}</text>` : ""}<text x="${x + 9}" y="94" text-anchor="middle" class="bl">${esc(m.lab)}</text></g>`; }).join("");
+    return `<g class="bg ${fMonth === m.key ? "sel" : ""}" data-m="${m.key}"><rect x="${x - 2}" y="0" width="22" height="96" class="hit"/><rect x="${x}" y="${80 - h}" width="18" height="${h}" rx="3" class="bar"><title>${m.lab} : ${m.n}</title></rect>${m.n ? `<text x="${x + 9}" y="${76 - h}" text-anchor="middle" class="bn">${m.n}</text>` : ""}<text x="${x + 9}" y="94" text-anchor="middle" class="bl">${esc(m.lab)}</text></g>`; }).join("");
   $("#dash").innerHTML = `<div class="dash">
     <div class="dblock"><h3>À faire aujourd'hui</h3>${todo.length ? todo.map(it => `<div class="trow"><span class="n">${logo(it)}${esc(it.nom)}</span><span class="note">${ageTxt(it)}</span><button data-a="todo" data-r="${it.row}">Préparer la relance</button></div>`).join("") : '<p class="note">Aucune relance en retard.</p>'}</div>
-    <div class="dblock"><h3>Envois par mois</h3><svg viewBox="0 0 304 100" class="chart">${bars}</svg></div>
+    <div class="dblock"><h3>Envois par mois <span class="note">(clique sur une barre)</span></h3><svg viewBox="0 0 304 100" class="chart">${bars}</svg></div>
     <div class="dblock"><h3>Réponses</h3><div class="big">${sent ? Math.round(resp / sent * 100) : 0}<small>%</small></div><p class="note">${resp} réponse(s) pour ${sent} envoi(s) (entretien, en cours, accepté ou refus)</p></div>
   </div><details id="mapDet" ${mapOpen ? "open" : ""}><summary>Carte de France</summary>${mapHtml()}</details>`;
   $("#mapDet").addEventListener("toggle", e => mapOpen = e.target.open);
@@ -423,6 +424,11 @@ function rowHtml(it) {
 /* ---------- Événements ---------- */
 $("#tabs").addEventListener("click", e => { if (e.target.dataset.t) { tab = e.target.dataset.t; render(); } });
 $("#q").addEventListener("input", render);
+$("#dash").addEventListener("click", e => {
+  const g = e.target.closest("[data-m]"); if (!g) return;
+  fMonth = fMonth === g.dataset.m ? "" : g.dataset.m; tab = "Toutes"; open = null; render();
+  if (fMonth) $("#monthChip").scrollIntoView({ block: "start", behavior: "smooth" });
+});
 $("#viewSeg").addEventListener("click", e => { const v = e.target.dataset.v; if (!v) return; view = v; localStorage.setItem("cand_view", v); render(); });
 $("#fSort").onchange = e => { sortBy = e.target.value; render(); };
 $("#fVille").onchange = e => { fVille = e.target.value; render(); };
@@ -452,6 +458,7 @@ document.addEventListener("click", async e => {
   const kc = t.closest(".kcard"); if (kc && !t.closest("select")) { view = "liste"; tab = "Toutes"; open = +kc.dataset.k; render(); document.getElementById("box-" + open)?.scrollIntoView({ block: "center" }); return; }
   const head = t.closest(".head"); if (head) { open = open === +head.dataset.o ? null : +head.dataset.o; render(); return; }
   const a = t.dataset.a; if (!a) return;
+  if (a === "clearMonth") { fMonth = ""; render(); return; }
   try {
     if (a === "addNew") {
       const g = newFound[+t.dataset.i], nm = document.querySelector(`[data-nn="${t.dataset.i}"]`).value.trim() || g.name;
@@ -538,13 +545,26 @@ function toHtml(body) {
   const sigHtml = sig.length ? `<br><br><div style="font-family:Arial,Helvetica,sans-serif;color:#888;font-size:12px;line-height:1.5"><b style="font-size:13px">${esc(sig[0])}</b>${sig.slice(1).map(l => "<br>" + linkify(l)).join("")}</div>` : "";
   return `<div style="${FONT}">${body.split("\n").map(l => linkify(l)).join("<br>")}</div>${sigHtml}`;
 }
+const FOREIGN = /vancouver|montr[eé]al|qu[eé]bec|toronto|london|londres|manchester|new ?york|los ?angeles|san ?francisco|usa|etats|états|uk|royaume|canada|berlin|munich|barcelon|madrid|amsterdam|dublin|sydney|melbourne|singapo|tokyo|mumbai|bruxelles|brussels|gen[eè]ve|zurich|luxembourg|lisbo|milan|rome|stockholm|copenh|oslo|helsinki|prague|warsaw|vari|bangalore|dubai/i;
+function langGuess(it) {
+  const lieu = (it.lieu || "").trim(), txt = `${it.notes} ${it.contactNom}`, dom = (domainOf(it) || ""), tld = dom.split(".").pop();
+  if (/english|anglais|anglophone/i.test(txt)) return { lang: "en", why: "les notes mentionnent l'anglais" };
+  if (/fran[cç]ais|french/i.test(txt) && !/english|anglais/i.test(txt)) return { lang: "fr", why: "les notes mentionnent le français" };
+  if (lieu && FOREIGN.test(lieu) && !/france/i.test(lieu)) return { lang: "en", why: `studio basé à ${lieu} (hors France)` };
+  if (lieu && FR_HINT.test(lieu)) return { lang: "fr", why: `studio basé à ${lieu}` };
+  if (tld === "fr") return { lang: "fr", why: `adresse en .${tld} (${dom})` };
+  if (["uk", "us", "ca", "au", "de", "es", "nl", "ie", "se", "dk", "no", "it"].includes(tld)) return { lang: "en", why: `adresse en .${tld} (hors France)` };
+  if (lieu) return { lang: "fr", why: `studio basé à ${lieu} (à confirmer)` };
+  if (dom) return { lang: "en", why: `adresse en .${tld} et aucune ville française connue (à confirmer)` };
+  return { lang: "fr", why: "aucune info sur l'entreprise : français par défaut" };
+}
 async function mailBox(it, box, isRelance) {
-  const guess = FR_HINT.test(`${it.lieu} ${it.contact}`) ? "fr" : "en";
+  const sug = langGuess(it), guess = sug.lang;
   const draw = lang => {
     const subj = isRelance ? (lang === "fr" ? "Re : 3D/VFX" : "Re: 3D/VFX") : "3D/VFX";
     const body = fillTpl((isRelance ? "relance_" : "") + lang, lang, it);
     const canDraft = /@/.test(it.contact) && !demo;
-    box.innerHTML = `<div class="row"><label class="note">Langue</label><select id="dLang"><option value="fr" ${lang === "fr" ? "selected" : ""}>Français</option><option value="en" ${lang === "en" ? "selected" : ""}>English</option></select></div>
+    box.innerHTML = `<p class="note">Suggestion : <b>${sug.lang === "fr" ? "français" : "English"}</b> — ${esc(sug.why)}.</p><div class="row"><label class="note">Langue</label><select id="dLang"><option value="fr" ${lang === "fr" ? "selected" : ""}>Français</option><option value="en" ${lang === "en" ? "selected" : ""}>English</option></select></div>
       <label class="note">Objet</label><input id="dObj" style="width:100%" value="${esc(subj)}"><label class="note">Corps (la signature des Réglages est ajoutée automatiquement)</label><textarea id="dBody" rows="12">${esc(body)}</textarea>
       <div class="safe">Rien ne part d'ici : ce bouton crée un brouillon dans ton Gmail, que tu envoies toi-même.</div>
       <div class="row"><button class="pri" id="dGo" ${canDraft ? "" : "disabled"}>Créer le brouillon Gmail</button><button id="dCopy">Copier</button><span id="dMsg" class="note">${canDraft ? "" : "Il faut une adresse mail dans « Contact » (et être connecté)."}</span></div>`;

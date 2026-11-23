@@ -93,3 +93,10 @@ details#mapDet{margin-top:12px}summary{cursor:pointer;color:var(--mute)}
 .tabs button.on{background:var(--ok);border-color:var(--ok);color:#06210f}
 button.pri{background:var(--ok);border-color:var(--ok);color:#06210f;font-weight:600}
 .mrow b{color:var(--ok)}
+
+.bg{cursor:pointer}.hit{fill:transparent}.bg:hover .bar{fill-opacity:.8}.bg.sel .bar{fill:#9be8b8}
+.bg.sel .bl{fill:var(--ok);font-weight:700}
+.chipx{border:0;background:transparent;color:inherit;padding:0 0 0 6px;cursor:pointer;font-size:12px}
+#monthChip .pill{display:inline-flex;align-items:center;font-size:13px}
+
+.bn,.bl{pointer-events:none}
